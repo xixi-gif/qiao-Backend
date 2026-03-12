@@ -7,7 +7,14 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # 数据库配置
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "mysql+pymysql://root:linjiaxin040219@localhost:3306/qiaoxiang_platform")
+    DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/qiao_backend?charset=utf8mb4"
+
+
+
+    # 新增 Neo4j 配置
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "linjiaxin")
 
     # JWT配置
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-keep-it-safe")
