@@ -28,8 +28,11 @@ app = FastAPI(title="南桥遗梦 - 后端接口服务")
 # 跨域配置 (如果你前端端口变了，可以在这里添加)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "*"], # 允许本地前端和所有来源
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,  # 必须为 True
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -67,4 +70,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8090, reload=True)
