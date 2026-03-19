@@ -920,10 +920,59 @@ class TSPPathPlanner:
 
         print(f"主题: {theme_name}")
 
+        # for resource_type in resource_types:
+        #     print(f"  查找 {resource_type} 资源...")
+        #
+        #     # 1. 查找直接关联主题的资源
+        #     direct_query = f"""
+        #     MATCH (r:{resource_type})-[:`关联主题`]->(th:StudyTheme {{theme_id: $theme_id}})
+        #     WHERE r.longitude IS NOT NULL AND r.latitude IS NOT NULL
+        #     RETURN r.resource_id as id, r.name as name,
+        #            '{resource_type}' as type,
+        #            COALESCE(r.district, '未知') as district,
+        #            COALESCE(r.activity_duration, '60') as duration,
+        #            r.longitude as lon,
+        #            r.latitude as lat,
+        #            COALESCE(r.description, '') as description,
+        #            COALESCE(r.capacity, '') as capacity,
+        #            'direct' as relation_type
+        #     """
+        #
+        #     # 2. 查找通过研学活动间接关联的资源
+        #     indirect_query = f"""
+        #     MATCH (r:{resource_type})-[:`包含活动`]->(a:StudyActivity)
+        #     MATCH (a)-[:`适配主题`]->(th:StudyTheme {{theme_id: $theme_id}})
+        #     WHERE r.longitude IS NOT NULL AND r.latitude IS NOT NULL
+        #     RETURN DISTINCT r.resource_id as id, r.name as name,
+        #            '{resource_type}' as type,
+        #            COALESCE(r.district, '未知') as district,
+        #            COALESCE(r.activity_duration, '60') as duration,
+        #            r.longitude as lon,
+        #            r.latitude as lat,
+        #            COALESCE(r.description, '') as description,
+        #            COALESCE(r.capacity, '') as capacity,
+        #            'indirect' as relation_type
+        #     """
+        #
+        #     # 3. 查找通过主题活动间接关联的资源
+        #     # 有些资源可能通过"适配主题"关系连接
+        #     theme_related_query = f"""
+        #     MATCH (r:{resource_type})-[:`适配主题`]->(th:StudyTheme {{theme_id: $theme_id}})
+        #     WHERE r.longitude IS NOT NULL AND r.latitude IS NOT NULL
+        #     RETURN DISTINCT r.resource_id as id, r.name as name,
+        #            '{resource_type}' as type,
+        #            COALESCE(r.district, '未知') as district,
+        #            COALESCE(r.activity_duration, '60') as duration,
+        #            r.longitude as lon,
+        #            r.latitude as lat,
+        #            COALESCE(r.description, '') as description,
+        #            COALESCE(r.capacity, '') as capacity,
+        #            'theme_related' as relation_type
+        #     """
         for resource_type in resource_types:
             print(f"  查找 {resource_type} 资源...")
 
-            # 1. 查找直接关联主题的资源
+            # 1. 查找直接关联主题的资源（修正注释格式）
             direct_query = f"""
             MATCH (r:{resource_type})-[:`关联主题`]->(th:StudyTheme {{theme_id: $theme_id}})
             WHERE r.longitude IS NOT NULL AND r.latitude IS NOT NULL
@@ -935,10 +984,14 @@ class TSPPathPlanner:
                    r.latitude as lat,
                    COALESCE(r.description, '') as description,
                    COALESCE(r.capacity, '') as capacity,
-                   'direct' as relation_type
+                   'direct' as relation_type,
+                   COALESCE(r.opening_hours, '') as opening_hours,  // 改用//注释（可选，也可直接删）
+                   COALESCE(r.related_resources, '') as related_resources,
+                   r.resource_id as resource_id,
+                   COALESCE(r.uid, '') as uid
             """
 
-            # 2. 查找通过研学活动间接关联的资源
+            # 2. 查找通过研学活动间接关联的资源（修正注释格式）
             indirect_query = f"""
             MATCH (r:{resource_type})-[:`包含活动`]->(a:StudyActivity)
             MATCH (a)-[:`适配主题`]->(th:StudyTheme {{theme_id: $theme_id}})
@@ -951,11 +1004,14 @@ class TSPPathPlanner:
                    r.latitude as lat,
                    COALESCE(r.description, '') as description,
                    COALESCE(r.capacity, '') as capacity,
-                   'indirect' as relation_type
+                   'indirect' as relation_type,
+                   COALESCE(r.opening_hours, '') as opening_hours,
+                   COALESCE(r.related_resources, '') as related_resources,
+                   r.resource_id as resource_id,
+                   COALESCE(r.uid, '') as uid
             """
 
-            # 3. 查找通过主题活动间接关联的资源
-            # 有些资源可能通过"适配主题"关系连接
+            # 3. 查找通过主题活动间接关联的资源（修正注释格式）
             theme_related_query = f"""
             MATCH (r:{resource_type})-[:`适配主题`]->(th:StudyTheme {{theme_id: $theme_id}})
             WHERE r.longitude IS NOT NULL AND r.latitude IS NOT NULL
@@ -967,7 +1023,11 @@ class TSPPathPlanner:
                    r.latitude as lat,
                    COALESCE(r.description, '') as description,
                    COALESCE(r.capacity, '') as capacity,
-                   'theme_related' as relation_type
+                   'theme_related' as relation_type,
+                   COALESCE(r.opening_hours, '') as opening_hours,
+                   COALESCE(r.related_resources, '') as related_resources,
+                   r.resource_id as resource_id,
+                   COALESCE(r.uid, '') as uid
             """
 
             # 执行查询

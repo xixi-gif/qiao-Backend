@@ -23,22 +23,46 @@ async def get_all_themes():
 
 @router.get("/theme-resources/{theme_id}", summary="获取主题下的所有资源点（测试辅助）")
 async def get_theme_resources(theme_id: str):
-    """
-    辅助接口：用于查询某个主题下包含哪些资源，方便获取 start_uid 进行测试
-    """
     try:
         resources = planner.get_resources_by_theme(theme_id)
         if not resources:
             raise HTTPException(status_code=404, detail="该主题下未找到有效资源")
 
-        # 只返回必要的字段供前端/测试查看
-        return [{"uid": r["uid"], "name": r["name"], "type": r["type"], "district": r.get("district")} for r in
-                resources]
+        formatted_resources = []
+        for r in resources:
+            lat_str = r.get("lat", "")
+            lon_str = r.get("lon", "")
+            try:
+                clean_lat = ''.join([c for c in lat_str if c.isdigit() or c == '.'])
+                latitude = float(clean_lat) if clean_lat else 0.0
+            except:
+                latitude = 0.0
+            try:
+                clean_lon = ''.join([c for c in lon_str if c.isdigit() or c == '.'])
+                longitude = float(clean_lon) if clean_lon else 0.0
+            except:
+                longitude = 0.0
+
+            formatted_resources.append({
+                "id": r.get("id", ""),
+                "activity_duration": r.get("duration", ""),
+                "capacity": r.get("capacity", ""),
+                "description": r.get("description", ""),
+                "district": r.get("district", ""),
+                "latitude": latitude,
+                "longitude": longitude,
+                "name": r.get("name", ""),
+                "opening_hours": r.get("opening_hours", ""),
+                "related_resources": r.get("related_resources", ""),
+                "resource_id": r.get("resource_id", ""),
+                "uid": r.get("uid", ""),
+                "type": r.get("type", "")
+            })
+        return formatted_resources
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询资源失败: {str(e)}")
-
 
 @router.post("/plan", response_model=PlanResponse, summary="生成最优研学路径")
 async def generate_study_route(request: PlanRequest):
