@@ -13,6 +13,7 @@ from app.api.db.database import engine
 # 2. 新增路径规划路由的导入
 from app.api.routes.planner import router as planner_router
 from app.api.routes.announcement import router as announcement_router
+from app.api.routes.project import router as project_router
 
 # ========== 修复日志配置（关键！）==========
 # 配置根日志器，覆盖所有模块（包括FastAPI、路由、CRUD）
@@ -34,7 +35,7 @@ logging.getLogger("uvicorn").setLevel(logging.DEBUG)
 # 执行 SQL 数据库建表 (MySQL)
 Base.metadata.create_all(bind=engine)
 
-# 初始化 FastAPI
+
 app = FastAPI(title="南桥遗梦 - 后端接口服务", debug=True)  # 开启debug模式
 
 # ========== 修复CORS（兼容所有前端地址）==========
@@ -61,9 +62,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # --- 注册路由模块 ---
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(planner_router, prefix="/api/v1/planner", tags=["研学路径规划"])
 app.include_router(announcement_router, prefix="/api/announcements", tags=["announcements"])
+app.include_router(project_router, prefix="/api", tags=["projects"])
 
 @app.get("/")
 def root():

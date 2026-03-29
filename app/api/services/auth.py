@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordBearer
@@ -27,7 +29,9 @@ def create_token_response(user) -> Token:
             "username": user.username,
             "phone": user.phone,
             "role": user.role.value,
-            "avatar": user.avatar
+            "avatar": user.avatar,
+            "shop_name": user.shop_name,
+            "shop_address": user.shop_address
         }
     )
 
@@ -50,3 +54,31 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+
+async def get_current_merchant(
+    current_user = Depends(get_current_user)
+) -> Any:
+    """
+    仅允许商家角色访问的接口依赖
+    """
+    if current_user.role.value != "merchant":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅商家账号可访问此接口",
+        )
+    return current_user
+
+
+async def get_current_admin(
+    current_user = Depends(get_current_user)
+) -> Any:
+    """
+    仅允许管理员角色访问的接口依赖
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅管理员账号可访问此接口",
+        )
+    return current_user

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.api.models.user import User, VerifyCode, UserRole, VerifyCodeType
-from app.api.schemas.user import UserCreate, ResetPasswordRequest
+from app.api.schemas.user import UserCreate, ResetPasswordRequest,UserUpdateRequest
 from app.api.utils.security import get_password_hash, verify_password
 from app.api.utils.verify_code import generate_verify_code, get_expire_time
 from datetime import datetime
@@ -81,3 +81,28 @@ def reset_password(db: Session, request: ResetPasswordRequest) -> bool:
     user.password = get_password_hash(request.password)
     db.commit()
     return True
+
+
+def update_user(db: Session, user_id: int, user_update: UserUpdateRequest) -> User:
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return None
+
+    update_data = user_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        if hasattr(db_user, key) and key not in ['id', 'password', 'role', 'is_delete', 'create_time']:
+            setattr(db_user, key, value)
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+def update_user_avatar(db: Session, user_id: int, avatar_url: str):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+    user.avatar = avatar_url
+    db.commit()
+    db.refresh(user)
+    return user

@@ -6,7 +6,7 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # 数据库配置
-    DATABASE_URL: str = "mysql+pymysql://root@127.0.0.1:3306/qiaoxiang_platform?charset=utf8mb4"
+    DATABASE_URL: str = "mysql+pymysql://root:linjiaxin040219@127.0.0.1:3306/qiaoxiang_platform?charset=utf8mb4"
 
     # 新增 Neo4j 配置
     NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")

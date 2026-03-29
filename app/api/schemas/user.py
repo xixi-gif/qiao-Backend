@@ -72,6 +72,23 @@ class UserProfileResponse(BaseModel):
     avatar: Optional[str] = None
     phone: str
     role: str
+    shop_name: Optional[str] = None
+    shop_address: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class UserUpdateRequest(BaseModel):
+    username: Optional[str] = Field(None, min_length=2, max_length=16, description="用户名")
+    avatar: Optional[str] = Field(None, description="用户头像路径/URL")
+    phone: Optional[str] = Field(None, description="手机号")
+    shop_name: Optional[str] = Field(None, max_length=100, description="店铺名称")
+    shop_address: Optional[str] = Field(None, max_length=255, description="店铺地址")
+
+    @validator("phone")
+    def validate_phone(cls, v):
+        if v is None:
+            return v
+        if not re.match(r"^1[3-9]\d{9}$", v):
+            raise ValueError("请输入正确的11位手机号")
+        return v
