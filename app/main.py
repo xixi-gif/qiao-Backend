@@ -63,6 +63,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # --- 注册路由模块 ---
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(planner_router, prefix="/api/v1/planner", tags=["研学路径规划"])
 app.include_router(announcement_router, prefix="/api/announcements", tags=["announcements"])

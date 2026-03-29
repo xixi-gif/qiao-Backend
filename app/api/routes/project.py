@@ -1,10 +1,11 @@
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.api.db.database import get_db
 from app.api.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.api.crud.project import create_project, get_projects_by_merchant, get_project_by_id, delete_project, update_project
-from app.api.services.auth import get_current_merchant
+from app.api.services.auth import get_current_merchant, get_current_user
 from app.api.models.user import User
 from app.api.models.project import Project
 import os
@@ -45,7 +46,7 @@ async def create_project_endpoint(
             file_path = os.path.join(save_dir, file_name)
             with open(file_path, "wb") as f:
                 f.write(contents)
-            cover_path = f"/{file_path}"
+            cover_path = f"/static/projects/{file_name}"
         project_create = ProjectCreate(
             title=title,
             category=category,
@@ -132,9 +133,7 @@ async def update_project_endpoint(
         file_path = os.path.join(save_dir, file_name)
         with open(file_path, "wb") as f:
             f.write(contents)
-        if project.cover and os.path.exists(project.cover.strip("/")):
-            os.remove(project.cover.strip("/"))
-        new_cover = f"/{file_path}"
+        new_cover = f"/static/projects/{file_name}"
     update_data = ProjectUpdate(
         title=title,
         category=category,
@@ -148,3 +147,210 @@ async def update_project_endpoint(
         contact=contact
     )
     return update_project(db, id, update_data, new_cover)
+
+@router.get("/admin/projects/list", response_model=list[ProjectResponse])
+def admin_get_all_projects(
+    title: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    query = db.query(Project).filter(Project.is_deleted == False)
+    if title:
+        query = query.filter(Project.title.contains(title))
+    if status:
+        query = query.filter(Project.status == status)
+    return query.offset(skip).limit(limit).all()
+
+@router.get("/admin/projects/{id}", response_model=ProjectResponse)
+def admin_get_project_detail(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    project = get_project_by_id(db, id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return project
+
+@router.put("/admin/projects/audit/{id}")
+def admin_audit_project(
+    id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    if status not in ["active", "rejected", "pending"]:
+        raise HTTPException(status_code=400, detail="状态不合法")
+    project = get_project_by_id(db, id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    project.status = status
+    db.commit()
+    return {"detail": "审核成功"}
+
+@router.put("/admin/projects/batch-audit")
+def admin_batch_audit_projects(
+    ids: List[int],
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    if status not in ["active", "rejected", "pending"]:
+        raise HTTPException(status_code=400, detail="状态不合法")
+    projects = db.query(Project).filter(Project.id.in_(ids), Project.is_deleted == False).all()
+    for p in projects:
+        p.status = status
+    db.commit()
+    return {"detail": f"批量审核成功，共 {len(projects)} 条"}
+
+@router.delete("/admin/projects/{id}")
+def admin_delete_project(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可访问")
+    project = get_project_by_id(db, id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    project.is_deleted = True
+    db.commit()
+    return {"detail": "管理员删除成功"}
+
+@router.get("/tourism/projects")
+def tourism_get_active_projects(
+    title: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Project, User).join(
+        User, Project.merchant_id == User.id
+    ).filter(
+        Project.status == "active",
+        Project.is_deleted == False
+    )
+
+    if title:
+        query = query.filter(Project.title.contains(title))
+
+    results = query.offset(skip).limit(limit).all()
+    res = []
+    for project, user in results:
+        item = {
+            "id": project.id,
+            "title": project.title,
+            "category": project.category,
+            "tags": project.tags,
+            "cover": project.cover,
+            "address": project.address,
+            "start_time": project.start_time,
+            "end_time": project.end_time,
+            "price": project.price,
+            "max_people": project.max_people,
+            "description": project.description,
+            "contact": project.contact,
+            "status": project.status,
+            "merchant_id": project.merchant_id,
+            "views": project.views,
+            "orders": project.orders,
+            "merchant": {
+                "shopName": user.shop_name,
+                "avatar": user.avatar,
+                "shopAddress": user.shop_address
+            }
+        }
+        res.append(item)
+    return res
+
+@router.post("/tourism/projects/{id}/view")
+def add_project_view(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(
+        Project.id == id,
+        Project.status == "active",
+        Project.is_deleted == False
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    project.views = (project.views or 0) + 1
+    db.commit()
+    return {"detail": "success", "views": project.views}
+
+@router.get("/tourism/projects/{id}")
+def tourism_get_project_detail(
+    id: int,
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(
+        Project.id == id,
+        Project.status == "active",
+        Project.is_deleted == False
+    ).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在或未上线")
+
+    user = db.query(User).filter(User.id == project.merchant_id).first()
+
+    return {
+        "id": project.id,
+        "title": project.title,
+        "category": project.category,
+        "tags": project.tags,
+        "cover": project.cover,
+        "address": project.address,
+        "start_time": project.start_time,
+        "end_time": project.end_time,
+        "price": project.price,
+        "max_people": project.max_people,
+        "description": project.description,
+        "contact": project.contact,
+        "status": project.status,
+        "merchant_id": project.merchant_id,
+        "views": project.views,
+        "orders": project.orders,
+        "merchant": {
+            "shopName": user.shop_name,
+            "avatar": user.avatar,
+            "shopAddress": user.shop_address
+        }
+    }
+
+@router.get("/tourism/merchant/{merchant_id}")
+def tourism_get_merchant_info(
+    merchant_id: int,
+    db: Session = Depends(get_db)
+):
+    merchant = db.query(User).filter(User.id == merchant_id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="商家不存在")
+
+    projects = db.query(Project).filter(
+        Project.merchant_id == merchant_id,
+        Project.status == "active",
+        Project.is_deleted == False
+    ).all()
+
+    return {
+        "id": merchant.id,
+        "shopName": merchant.shop_name,
+        "avatar": merchant.avatar,
+        "shopAddress": merchant.shop_address,
+        "introduction": "",
+        "projects": projects
+    }
