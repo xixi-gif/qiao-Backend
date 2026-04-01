@@ -28,6 +28,7 @@ class User(Base):
     shop_name = Column(String(100), nullable=True)
     shop_address = Column(String(255), nullable=True)
     projects = relationship("Project", back_populates="merchant")
+    checkins = relationship("Checkin", back_populates="user", cascade="all, delete-orphan")
 
 class VerifyCode(Base):
     __tablename__ = "verify_code"

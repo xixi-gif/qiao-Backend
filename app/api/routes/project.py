@@ -8,10 +8,15 @@ from app.api.crud.project import create_project, get_projects_by_merchant, get_p
 from app.api.services.auth import get_current_merchant, get_current_user
 from app.api.models.user import User
 from app.api.models.project import Project
+from pydantic import BaseModel
 import os
 import uuid
 
 router = APIRouter()
+
+class BatchAuditRequest(BaseModel):
+    ids: List[int]
+    status: str
 
 @router.post("/merchant/projects", response_model=ProjectResponse)
 async def create_project_endpoint(
@@ -199,18 +204,17 @@ def admin_audit_project(
 
 @router.put("/admin/projects/batch-audit")
 def admin_batch_audit_projects(
-    ids: List[int],
-    status: str,
+    body: BatchAuditRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可访问")
-    if status not in ["active", "rejected", "pending"]:
+    if body.status not in ["active", "rejected", "pending"]:
         raise HTTPException(status_code=400, detail="状态不合法")
-    projects = db.query(Project).filter(Project.id.in_(ids), Project.is_deleted == False).all()
+    projects = db.query(Project).filter(Project.id.in_(body.ids), Project.is_deleted == False).all()
     for p in projects:
-        p.status = status
+        p.status = body.status
     db.commit()
     return {"detail": f"批量审核成功，共 {len(projects)} 条"}
 

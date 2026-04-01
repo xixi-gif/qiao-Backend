@@ -1,9 +1,10 @@
 from sqlalchemy.orm import Session
 from app.api.models.user import User, VerifyCode, UserRole, VerifyCodeType
-from app.api.schemas.user import UserCreate, ResetPasswordRequest,UserUpdateRequest
+from app.api.schemas.user import UserCreate, ResetPasswordRequest, UserUpdateRequest
 from app.api.utils.security import get_password_hash, verify_password
 from app.api.utils.verify_code import generate_verify_code, get_expire_time
 from datetime import datetime
+from typing import Optional
 
 def get_user_by_phone(db: Session, phone: str) -> User:
     return db.query(User).filter(User.phone == phone, User.is_delete == False).first()
@@ -82,7 +83,6 @@ def reset_password(db: Session, request: ResetPasswordRequest) -> bool:
     db.commit()
     return True
 
-
 def update_user(db: Session, user_id: int, user_update: UserUpdateRequest) -> User:
     db_user = get_user_by_id(db, user_id)
     if not db_user:
@@ -97,12 +97,52 @@ def update_user(db: Session, user_id: int, user_update: UserUpdateRequest) -> Us
     db.refresh(db_user)
     return db_user
 
-
 def update_user_avatar(db: Session, user_id: int, avatar_url: str):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return None
     user.avatar = avatar_url
+    db.commit()
+    db.refresh(user)
+    return user
+
+def get_user_list(db: Session, username: Optional[str] = None, phone: Optional[str] = None, role: Optional[str] = None, is_active: Optional[bool] = None):
+    query = db.query(User).filter(User.is_delete == False)
+    if username:
+        query = query.filter(User.username.contains(username))
+    if phone:
+        query = query.filter(User.phone.contains(phone))
+    if role:
+        query = query.filter(User.role == UserRole(role))
+    if is_active is not None:
+        query = query.filter(User.is_active == is_active)
+    return query.all()
+
+def admin_update_user(db: Session, user_id: int, user_data: dict):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    allowed_fields = ['username', 'phone', 'shop_name', 'shop_address']
+    for key in allowed_fields:
+        if key in user_data and user_data[key] is not None:
+            setattr(user, key, user_data[key])
+    if 'role' in user_data and user_data['role'] in [r.value for r in UserRole]:
+        user.role = UserRole(user_data['role'])
+    db.commit()
+    db.refresh(user)
+    return user
+
+def delete_user(db: Session, user_id: int):
+    user = get_user_by_id(db, user_id)
+    if user:
+        user.is_delete = True
+        db.commit()
+
+def toggle_user_status(db: Session, user_id: int):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+    user.is_active = not user.is_active
     db.commit()
     db.refresh(user)
     return user

@@ -23,4 +23,5 @@ class Project(Base):
     orders = Column(Integer, default=0)
     is_deleted = Column(Boolean, default=False)
 
+    # 关键：加上这个关系，报错彻底消失
     merchant = relationship("User", back_populates="projects")
