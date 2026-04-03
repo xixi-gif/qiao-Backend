@@ -1,5 +1,5 @@
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -16,6 +16,11 @@ from app.api.routes.carousel import router as carousel_router
 from app.api.routes import tag, category
 from app.api.routes.interaction import router as interaction_router
 from app.api.routes.checkin import router as checkin_router
+from app.api.routes.markdown import router as md_router
+from app.api.routes.chat import router as chat_router
+from app.api.routes.knowledge_graph import router as kg_router
+from app.api.utils.websocket import manager
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -54,8 +59,18 @@ async def global_exception_handler(request: Request, exc: Exception):
         headers={"Content-Type": "application/json"}
     )
 
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
+    await manager.connect(user_id, websocket)
+    try:
+        while True:
+            await websocket.receive_json()
+    except WebSocketDisconnect:
+        manager.disconnect(user_id)
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/storage", StaticFiles(directory="app/api/storage"), name="storage")
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(planner_router, prefix="/api/v1/planner", tags=["研学路径规划"])
@@ -66,13 +81,16 @@ app.include_router(tag.router, prefix="/api", tags=["tags"])
 app.include_router(category.router, prefix="/api", tags=["categories"])
 app.include_router(interaction_router, prefix="/api", tags=["interact"])
 app.include_router(checkin_router, prefix="/api", tags=["打卡模块"])
+app.include_router(md_router)
+app.include_router(chat_router)
+app.include_router(kg_router, prefix="/api", tags=["侨文化知识图谱"])
 
 @app.get("/")
 def root():
     logger.info("根路径被访问了！")
     return {
         "message": "欢迎使用南桥遗梦后端接口",
-        "modules": ["auth", "path-planner"],
+        "modules": ["auth", "path-planner", "chat"],
         "docs": "/docs"
     }
 
