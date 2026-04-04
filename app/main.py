@@ -19,6 +19,9 @@ from app.api.routes.checkin import router as checkin_router
 from app.api.routes.markdown import router as md_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.knowledge_graph import router as kg_router
+from app.api.routes.chat_router import router as aichat_router
+from app.api.routes.merchant_analysis import router as analysis_router
+from app.api.routes.admin_statistics import router as admin_statistics_router
 from app.api.utils.websocket import manager
 
 
@@ -81,9 +84,12 @@ app.include_router(tag.router, prefix="/api", tags=["tags"])
 app.include_router(category.router, prefix="/api", tags=["categories"])
 app.include_router(interaction_router, prefix="/api", tags=["interact"])
 app.include_router(checkin_router, prefix="/api", tags=["打卡模块"])
+app.include_router(kg_router, prefix="/api", tags=["侨文化知识图谱"])
+app.include_router(aichat_router, prefix="/api", tags=["侨文化知识问答"])
 app.include_router(md_router)
 app.include_router(chat_router)
-app.include_router(kg_router, prefix="/api", tags=["侨文化知识图谱"])
+app.include_router(analysis_router)
+app.include_router(admin_statistics_router)
 
 @app.get("/")
 def root():

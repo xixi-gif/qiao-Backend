@@ -11,12 +11,23 @@ from typing import List
 router = APIRouter(prefix="/api/markdown", tags=["markdown"])
 
 
-@router.get("/list")
-def list_docs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(MarkdownDoc).filter(MarkdownDoc.is_deleted == False) \
-        .order_by(MarkdownDoc.created_at.desc()) \
-        .offset(skip).limit(limit).all()
+@router.get("/admin/list")
+def list_docs(skip: int = 0, limit: int = 20, title: str = "", db: Session = Depends(get_db)):
+    query = db.query(MarkdownDoc).filter(MarkdownDoc.is_deleted == False).order_by(MarkdownDoc.created_at.desc())
+    if title:
+        query = query.filter(MarkdownDoc.title.contains(title))
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"total": total, "items": items}
 
+@router.get("/list")
+def list_docs(skip: int = 0, limit: int = 20, title: str = "", db: Session = Depends(get_db)):
+    query = db.query(MarkdownDoc).filter(MarkdownDoc.is_deleted == False).order_by(MarkdownDoc.created_at.desc())
+    if title:
+        query = query.filter(MarkdownDoc.title.contains(title))
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"total": total, "items": items}
 
 @router.get("/{doc_id}")
 def get_one(doc_id: int, db: Session = Depends(get_db)):

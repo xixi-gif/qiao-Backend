@@ -27,4 +27,9 @@ class Settings(BaseSettings):
     VERIFY_CODE_EXPIRE_MINUTES: int = 5
     VERIFY_CODE_LENGTH: int = 6
 
+    #coze配置
+    COZE_BOT_ID: str = "7624531097216630818"
+    COZE_API_KEY: str = "pat_GvzG7urToB67hUiNrAKECo9HRUtev9VLXo0VcUiX6FRakadcPToU0Y2LPJDdktYs"
+    COZE_API_URL: str = "https://api.coze.cn/api/v3/chat/completions"
+
 settings = Settings()
