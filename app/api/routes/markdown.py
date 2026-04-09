@@ -7,9 +7,11 @@ from app.api.crud.markdown import get_docs, get_doc, create_doc, update_doc, del
 from app.api.schemas.markdown import MarkdownDocCreate, MarkdownDocUpdate, MarkdownDocResponse
 from app.api.utils.file_util import save_md, save_image
 from app.api.models.markdown import MarkdownDoc, MarkdownImage, UserMarkdownFavorite
+from app.api.services.auth import get_current_merchant, get_current_user
 from typing import List
 from app.api.core.redis_client import cache_get, cache_set, cache_delete
 from datetime import datetime
+from app.api.models.user import User
 
 router = APIRouter(prefix="/api/markdown", tags=["markdown"])
 
@@ -150,7 +152,8 @@ async def batch_upload(files: List[UploadFile] = File(...), db: Session = Depend
     return {"success": success}
 
 @router.post("/favorite/{doc_id}")
-def toggle_favorite(doc_id: int, user_id: int, db: Session = Depends(get_db)):
+def toggle_favorite(doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
     doc = db.query(MarkdownDoc).filter(MarkdownDoc.id == doc_id, MarkdownDoc.is_deleted == False).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
@@ -171,8 +174,8 @@ def toggle_favorite(doc_id: int, user_id: int, db: Session = Depends(get_db)):
         return {"action": "favorite"}
 
 @router.get("/my/favorites")
-def get_my_favorites(user_id: int, db: Session = Depends(get_db)):
-    favs = db.query(UserMarkdownFavorite).filter(UserMarkdownFavorite.user_id == user_id).all()
+def get_my_favorites(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    favs = db.query(UserMarkdownFavorite).filter(UserMarkdownFavorite.user_id == current_user.id).all()
     doc_ids = [f.doc_id for f in favs]
     docs = db.query(MarkdownDoc).filter(
         MarkdownDoc.id.in_(doc_ids),
@@ -181,6 +184,6 @@ def get_my_favorites(user_id: int, db: Session = Depends(get_db)):
     return docs
 
 @router.get("/my/favorite-ids")
-def get_my_favorite_ids(user_id: int, db: Session = Depends(get_db)):
-    favs = db.query(UserMarkdownFavorite).filter(UserMarkdownFavorite.user_id == user_id).all()
+def get_my_favorite_ids(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    favs = db.query(UserMarkdownFavorite).filter(UserMarkdownFavorite.user_id == current_user.id).all()
     return {"ids": [f.doc_id for f in favs]}
