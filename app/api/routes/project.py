@@ -11,6 +11,8 @@ from app.api.models.project import Project
 from pydantic import BaseModel
 import os
 import uuid
+import json
+from app.api.core.redis_client import cache_get, cache_set, cache_delete
 
 router = APIRouter()
 
@@ -65,6 +67,7 @@ async def create_project_endpoint(
             contact=contact
         )
         project = create_project(db, project_create, current_merchant.id, cover_path)
+        cache_delete("tourism:projects:*")
         return project
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建项目失败: {str(e)}")
@@ -102,6 +105,7 @@ def delete_project_endpoint(
         raise HTTPException(status_code=404, detail="项目不存在或无权限")
     project.is_deleted = True
     db.commit()
+    cache_delete("tourism:projects:*")
     return {"detail": "删除成功"}
 
 @router.put("/merchant/projects/{id}", response_model=ProjectResponse)
@@ -151,7 +155,9 @@ async def update_project_endpoint(
         description=description,
         contact=contact
     )
-    return update_project(db, id, update_data, new_cover)
+    res = update_project(db, id, update_data, new_cover)
+    cache_delete("tourism:projects:*")
+    return res
 
 @router.get("/admin/projects/list", response_model=list[ProjectResponse])
 def admin_get_all_projects(
@@ -169,7 +175,7 @@ def admin_get_all_projects(
         query = query.filter(Project.title.contains(title))
     if status:
         query = query.filter(Project.status == status)
-    return query.offset(skip).limit(limit).all()
+    return query.order_by(Project.created_at.desc()).offset(skip).limit(limit).all()
 
 @router.get("/admin/projects/{id}", response_model=ProjectResponse)
 def admin_get_project_detail(
@@ -200,6 +206,7 @@ def admin_audit_project(
         raise HTTPException(status_code=404, detail="项目不存在")
     project.status = status
     db.commit()
+    cache_delete("tourism:projects:*")
     return {"detail": "审核成功"}
 
 @router.put("/admin/projects/batch-audit")
@@ -216,6 +223,7 @@ def admin_batch_audit_projects(
     for p in projects:
         p.status = body.status
     db.commit()
+    cache_delete("tourism:projects:*")
     return {"detail": f"批量审核成功，共 {len(projects)} 条"}
 
 @router.delete("/admin/projects/{id}")
@@ -231,6 +239,7 @@ def admin_delete_project(
         raise HTTPException(status_code=404, detail="项目不存在")
     project.is_deleted = True
     db.commit()
+    cache_delete("tourism:projects:*")
     return {"detail": "管理员删除成功"}
 
 @router.get("/tourism/projects")
@@ -240,12 +249,17 @@ def tourism_get_active_projects(
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
+    cache_key = f"tourism:projects:{skip}:{limit}:{title}"
+    cached = cache_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
     query = db.query(Project, User).join(
         User, Project.merchant_id == User.id
     ).filter(
         Project.status == "active",
         Project.is_deleted == False
-    )
+    ).order_by(Project.created_at.desc())
 
     if title:
         query = query.filter(Project.title.contains(title))
@@ -260,8 +274,8 @@ def tourism_get_active_projects(
             "tags": project.tags,
             "cover": project.cover,
             "address": project.address,
-            "start_time": project.start_time,
-            "end_time": project.end_time,
+            "start_time": project.start_time.isoformat() if project.start_time else None,
+            "end_time": project.end_time.isoformat() if project.end_time else None,
             "price": project.price,
             "max_people": project.max_people,
             "description": project.description,
@@ -270,6 +284,7 @@ def tourism_get_active_projects(
             "merchant_id": project.merchant_id,
             "views": project.views,
             "orders": project.orders,
+            "created_at": project.created_at.isoformat(),
             "merchant": {
                 "shopName": user.shop_name,
                 "avatar": user.avatar,
@@ -277,6 +292,8 @@ def tourism_get_active_projects(
             }
         }
         res.append(item)
+
+    cache_set(cache_key, json.dumps(res), ex=60)
     return res
 
 @router.post("/tourism/projects/{id}/view")
@@ -293,6 +310,7 @@ def add_project_view(
         raise HTTPException(status_code=404, detail="项目不存在")
     project.views = (project.views or 0) + 1
     db.commit()
+    cache_delete("tourism:projects:*")
     return {"detail": "success", "views": project.views}
 
 @router.get("/tourism/projects/{id}")
@@ -300,6 +318,11 @@ def tourism_get_project_detail(
     id: int,
     db: Session = Depends(get_db)
 ):
+    cache_key = f"tourism:project:detail:{id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
     project = db.query(Project).filter(
         Project.id == id,
         Project.status == "active",
@@ -311,15 +334,15 @@ def tourism_get_project_detail(
 
     user = db.query(User).filter(User.id == project.merchant_id).first()
 
-    return {
+    data = {
         "id": project.id,
         "title": project.title,
         "category": project.category,
         "tags": project.tags,
         "cover": project.cover,
         "address": project.address,
-        "start_time": project.start_time,
-        "end_time": project.end_time,
+        "start_time": project.start_time.isoformat() if project.start_time else None,
+        "end_time": project.end_time.isoformat() if project.end_time else None,
         "price": project.price,
         "max_people": project.max_people,
         "description": project.description,
@@ -328,6 +351,7 @@ def tourism_get_project_detail(
         "merchant_id": project.merchant_id,
         "views": project.views,
         "orders": project.orders,
+        "created_at": project.created_at.isoformat(),
         "merchant": {
             "shopName": user.shop_name,
             "avatar": user.avatar,
@@ -335,11 +359,19 @@ def tourism_get_project_detail(
         }
     }
 
+    cache_set(cache_key, json.dumps(data), ex=60)
+    return data
+
 @router.get("/tourism/merchant/{merchant_id}")
 def tourism_get_merchant_info(
     merchant_id: int,
     db: Session = Depends(get_db)
 ):
+    cache_key = f"tourism:merchant:{merchant_id}"
+    cached = cache_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
     merchant = db.query(User).filter(User.id == merchant_id).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="商家不存在")
@@ -348,13 +380,37 @@ def tourism_get_merchant_info(
         Project.merchant_id == merchant_id,
         Project.status == "active",
         Project.is_deleted == False
-    ).all()
+    ).order_by(Project.created_at.desc()).all()
 
-    return {
+    proj_list = []
+    for p in projects:
+        proj_list.append({
+            "id": p.id,
+            "title": p.title,
+            "category": p.category,
+            "tags": p.tags,
+            "cover": p.cover,
+            "address": p.address,
+            "start_time": p.start_time.isoformat() if p.start_time else None,
+            "end_time": p.end_time.isoformat() if p.end_time else None,
+            "price": p.price,
+            "max_people": p.max_people,
+            "description": p.description,
+            "contact": p.contact,
+            "status": p.status,
+            "views": p.views,
+            "orders": p.orders,
+            "created_at": p.created_at.isoformat()
+        })
+
+    data = {
         "id": merchant.id,
         "shopName": merchant.shop_name,
         "avatar": merchant.avatar,
         "shopAddress": merchant.shop_address,
         "introduction": "",
-        "projects": projects
+        "projects": proj_list
     }
+
+    cache_set(cache_key, json.dumps(data), ex=60)
+    return data

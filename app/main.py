@@ -1,9 +1,11 @@
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import traceback
+import os
+from pathlib import Path
 
 from app.api.routes.auth import router as auth_router
 from app.api.db.base import Base
@@ -23,7 +25,7 @@ from app.api.routes.chat_router import router as aichat_router
 from app.api.routes.merchant_analysis import router as analysis_router
 from app.api.routes.admin_statistics import router as admin_statistics_router
 from app.api.utils.websocket import manager
-
+from app.api.routes.river_message import router as river_router
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -75,6 +77,17 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/storage", StaticFiles(directory="app/api/storage"), name="storage")
 
+STUDY_DIR = Path("static/study")
+@app.get("/api/study/images")
+async def get_study_images():
+    if not STUDY_DIR.exists():
+        raise HTTPException(status_code=404, detail="研学手册目录不存在")
+    images = []
+    for file in sorted(os.listdir(STUDY_DIR)):
+        if file.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            images.append(f"/static/study/{file}")
+    return {"images": images}
+
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(planner_router, prefix="/api/v1/planner", tags=["研学路径规划"])
 app.include_router(announcement_router, prefix="/api/announcements", tags=["announcements"])
@@ -86,6 +99,7 @@ app.include_router(interaction_router, prefix="/api", tags=["interact"])
 app.include_router(checkin_router, prefix="/api", tags=["打卡模块"])
 app.include_router(kg_router, prefix="/api", tags=["侨文化知识图谱"])
 app.include_router(aichat_router, prefix="/api", tags=["侨文化知识问答"])
+app.include_router(river_router, prefix="/api", tags=["river"])
 app.include_router(md_router)
 app.include_router(chat_router)
 app.include_router(analysis_router)

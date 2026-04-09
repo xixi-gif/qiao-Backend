@@ -178,25 +178,24 @@ def get_user_likes(db: Session, user_id: int):
 def get_user_comments(db: Session, user_id: int):
     return []
 
-
 def get_user_messages(db: Session, user_id):
     reply_comment = aliased(Comment)
     parent_comment = aliased(Comment)
 
     return db.query(
         Message,
-        User.username,
-        User.avatar,
-        Project.title,
+        User.username.label("from_username"),
+        User.avatar.label("from_avatar"),
+        Project.title.label("project_title"),
         parent_comment.content.label("my_original_comment"),
         reply_comment.content.label("his_reply_comment")
     )\
     .join(User, Message.from_user_id == User.id)\
-    .join(Project, Message.project_id == Project.id)\
+    .outerjoin(Project, Message.project_id == Project.id)\
     .outerjoin(reply_comment, Message.comment_id == reply_comment.id)\
     .outerjoin(parent_comment, reply_comment.parent_id == parent_comment.id)\
     .filter(Message.to_user_id == user_id)\
-    .order_by(Message.id.desc())\
+    .order_by(Message.created_at.desc())\
     .all()
 
 def mark_message_read(db: Session, msg_id, user_id):

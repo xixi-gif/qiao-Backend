@@ -33,7 +33,7 @@ def get_projects_by_merchant(db: Session, merchant_id: int, skip: int = 0, limit
     return db.query(Project).filter(
         Project.merchant_id == merchant_id,
         Project.is_deleted == False
-    ).offset(skip).limit(limit).all()
+    ).order_by(Project.created_at.desc()).offset(skip).limit(limit).all()
 
 def update_project(db: Session, project_id: int, project_update: ProjectUpdate, cover_path: str = None):
     db_project = db.query(Project).filter(Project.id == project_id, Project.is_deleted == False).first()

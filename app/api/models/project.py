@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger
 from sqlalchemy.orm import relationship
 from app.api.db.base import Base
@@ -22,6 +23,6 @@ class Project(Base):
     views = Column(Integer, default=0)
     orders = Column(Integer, default=0)
     is_deleted = Column(Boolean, default=False)
-
-    # 关键：加上这个关系，报错彻底消失
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     merchant = relationship("User", back_populates="projects")

@@ -41,17 +41,31 @@ async def get_like_status(target_type: str, target_id: int, db: Session = Depend
 
 @router.get("/interact/like/user/list")
 async def get_user_likes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    likes = db.query(Like).filter(Like.user_id == current_user.id, Like.is_delete == False).all()
+    likes = db.query(Like).filter(Like.user_id == current_user.id, Like.is_delete == False).order_by(Like.created_at.desc()).all()
     data = []
     for l in likes:
-        proj = db.query(Project).filter(Project.id == l.target_id).first()
-        if proj:
-            data.append({
-                "project_id": proj.id,
-                "title": proj.title,
-                "cover": proj.cover,
-                "created_at": l.created_at
-            })
+        item = {
+            "target_id": l.target_id,
+            "target_type": l.target_type,
+            "exists": True,
+            "title": "已删除",
+            "cover": None
+        }
+        if l.target_type == "project":
+            proj = db.query(Project).filter(Project.id == l.target_id).first()
+            if proj:
+                item["title"] = proj.title
+                item["cover"] = proj.cover
+            else:
+                item["exists"] = False
+        elif l.target_type == "checkin":
+            checkin = db.query(Checkin).filter(Checkin.id == l.target_id).first()
+            if checkin:
+                item["title"] = checkin.title
+                item["cover"] = checkin.image
+            else:
+                item["exists"] = False
+        data.append(item)
     return data
 
 @router.post("/interact/favorite")
@@ -70,7 +84,7 @@ async def create_favorite(body: InteractRequest, db: Session = Depends(get_db), 
 
 @router.get("/interact/favorite/count")
 async def get_favorite_count(target_type: str, target_id: int, db: Session = Depends(get_db)):
-    cnt = db.query(Favorite).filter(Favorite.target_type == target_type, Like.target_id == target_id, Favorite.is_delete == False).count()
+    cnt = db.query(Favorite).filter(Favorite.target_type == target_type, Favorite.target_id == target_id, Favorite.is_delete == False).count()
     return {"count": cnt}
 
 @router.get("/interact/favorite/status")
@@ -80,17 +94,31 @@ async def get_favorite_status(target_type: str, target_id: int, db: Session = De
 
 @router.get("/interact/favorite/user/list")
 async def get_user_favorites(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    favs = db.query(Favorite).filter(Favorite.user_id == current_user.id, Favorite.is_delete == False).all()
+    favs = db.query(Favorite).filter(Favorite.user_id == current_user.id, Favorite.is_delete == False).order_by(Favorite.created_at.desc()).all()
     data = []
     for f in favs:
-        proj = db.query(Project).filter(Project.id == f.target_id).first()
-        if proj:
-            data.append({
-                "project_id": proj.id,
-                "title": proj.title,
-                "cover": proj.cover,
-                "created_at": f.created_at
-            })
+        item = {
+            "target_id": f.target_id,
+            "target_type": f.target_type,
+            "exists": True,
+            "title": "已删除",
+            "cover": None
+        }
+        if f.target_type == "project":
+            proj = db.query(Project).filter(Project.id == f.target_id).first()
+            if proj:
+                item["title"] = proj.title
+                item["cover"] = proj.cover
+            else:
+                item["exists"] = False
+        elif f.target_type == "checkin":
+            checkin = db.query(Checkin).filter(Checkin.id == f.target_id).first()
+            if checkin:
+                item["title"] = checkin.title
+                item["cover"] = checkin.image
+            else:
+                item["exists"] = False
+        data.append(item)
     return data
 
 class CommentRequest(BaseModel):
@@ -133,9 +161,11 @@ async def create_comment(body: CommentRequest, db: Session = Depends(get_db), cu
         msg = Message(
             to_user_id=target_owner_id,
             from_user_id=current_user.id,
-            project_id=body.target_id,
+            target_type=body.target_type,
+            target_id=body.target_id,
             comment_id=new_comment.id,
             content=body.content,
+            msg_type="comment_project" if body.target_type == "project" else "comment_checkin",
             is_read=False,
             created_at=datetime.now()
         )
@@ -147,9 +177,11 @@ async def create_comment(body: CommentRequest, db: Session = Depends(get_db), cu
             new_msg = Message(
                 to_user_id=parent_comment.user_id,
                 from_user_id=current_user.id,
-                project_id=body.target_id,
-                comment_id=body.parent_id,
+                target_type=body.target_type,
+                target_id=body.target_id,
+                comment_id=new_comment.id,
                 content=body.content,
+                msg_type="reply_comment",
                 is_read=False,
                 created_at=datetime.now()
             )
@@ -160,19 +192,14 @@ async def create_comment(body: CommentRequest, db: Session = Depends(get_db), cu
 
 @router.get("/interact/comment/user/list")
 async def get_user_comments(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    comments = db.query(Comment).filter(
-        Comment.user_id == current_user.id
-    ).order_by(Comment.created_at.desc()).all()
-
+    comments = db.query(Comment).filter(Comment.user_id == current_user.id).order_by(Comment.created_at.desc()).all()
     data = []
     for c in comments:
         title = "打卡内容"
         if c.target_type == "project":
             proj = db.query(Project).filter(Project.id == c.target_id).first()
             title = proj.title if proj else "项目"
-
         content = "该评论已删除" if c.is_delete else c.content
-
         data.append({
             "id": c.id,
             "project_id": c.target_id,
@@ -187,12 +214,7 @@ async def get_user_comments(db: Session = Depends(get_db), current_user: User = 
 
 @router.get("/interact/comment/{target_type}/{target_id}")
 async def get_comments(target_type: str, target_id: int, db: Session = Depends(get_db)):
-    comments = db.query(Comment).filter(
-        Comment.target_type == target_type,
-        Comment.target_id == target_id,
-        Comment.status == "approved"
-    ).order_by(Comment.created_at.desc()).all()
-
+    comments = db.query(Comment).filter(Comment.target_type == target_type, Comment.target_id == target_id, Comment.status == "approved").order_by(Comment.created_at.desc()).all()
     result = []
     for c in comments:
         user = db.query(User).filter(User.id == c.user_id).first()
@@ -260,25 +282,47 @@ async def admin_delete_comment(comment_id: int, db: Session = Depends(get_db), c
 
 @router.get("/interact/message/my")
 async def get_my_messages(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    messages = db.query(Message).filter(Message.to_user_id == current_user.id).order_by(Message.created_at.desc()).all()
-    result = []
-    for msg in messages:
-        project = db.query(Project).filter(Project.id == msg.project_id).first()
-        from_user = db.query(User).filter(User.id == msg.from_user_id).first()
-        my_comment = db.query(Comment).filter(Comment.id == msg.comment_id).first()
+    messages = db.query(Message, User, Comment)\
+                .join(User, Message.from_user_id == User.id)\
+                .join(Comment, Message.comment_id == Comment.id)\
+                .filter(Message.to_user_id == current_user.id)\
+                .order_by(Message.created_at.desc()).all()
 
-        my_comment_content = "评论已删除"
-        if my_comment and not my_comment.is_delete:
-            my_comment_content = my_comment.content
+    result = []
+    for msg, from_user, comment in messages:
+        if comment.target_type == "project":
+            target = db.query(Project).filter(Project.id == comment.target_id).first()
+        else:
+            target = db.query(Checkin).filter(Checkin.id == comment.target_id).first()
+        target_title = target.title if target else "内容已删除"
+
+        original_comment = None
+        if msg.msg_type == "reply_comment" and comment.parent_id > 0:
+            original_comment = db.query(Comment).filter(Comment.id == comment.parent_id).first()
+
+        if msg.msg_type == "reply_comment":
+            msg_text = "回复了你的评论"
+        elif msg.msg_type == "comment_project":
+            msg_text = "评论了你的项目"
+        elif msg.msg_type == "comment_checkin":
+            msg_text = "评论了你的打卡"
+        else:
+            msg_text = "互动消息"
 
         result.append({
-            "msg_id": msg.id,
-            "my_comment": my_comment_content,
-            "his_reply": msg.content,
+            "id": msg.id,
             "is_read": msg.is_read,
             "created_at": msg.created_at,
-            "project": {"id": project.id if project else 0, "title": project.title if project else "项目已删除"},
-            "reply_user": {"username": from_user.username if from_user else "用户", "avatar": from_user.avatar if from_user else None}
+            "msg_text": msg_text,
+            "content": comment.content,
+            "my_original_comment": original_comment.content if original_comment else "",
+            "target_type": comment.target_type,
+            "target_id": comment.target_id,
+            "target_title": target_title,
+            "user": {
+                "username": from_user.username,
+                "avatar": from_user.avatar
+            }
         })
     return result
 

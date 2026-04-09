@@ -15,14 +15,15 @@ def get_user_by_username(db: Session, username: str) -> User:
 def get_user_by_id(db: Session, user_id: int) -> User:
     return db.query(User).filter(User.id == user_id, User.is_delete == False).first()
 
-def create_user(db: Session, user: UserCreate) -> User:
+def create_user(db: Session, user: UserCreate, avatar: str) -> User:
     hashed_password = get_password_hash(user.password)
     user_role = UserRole(user.role) if hasattr(user, 'role') and user.role in [r.value for r in UserRole] else UserRole.visitor
     db_user = User(
         username=user.username,
         phone=user.phone,
         password=hashed_password,
-        role=user_role
+        role=user_role,
+        avatar=avatar
     )
     db.add(db_user)
     db.commit()

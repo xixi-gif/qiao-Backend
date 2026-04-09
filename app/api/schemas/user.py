@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=6, description="密码")
     confirm_password: str = Field(description="确认密码")
     role: str = Field(default="visitor", description="角色")
+    avatar: str | None = None
 
     @validator("phone")
     def validate_phone(cls, v):
@@ -45,7 +46,6 @@ class VerifyCodeRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     phone: str = Field(description="手机号")
-    code: str = Field(min_length=6, max_length=6, description="验证码")
     password: str = Field(min_length=6, description="新密码")
     confirm_password: str = Field(description="确认新密码")
 
